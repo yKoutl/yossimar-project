@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import mayrinImg from './assets/image.png';
+import yossimarImg from './assets/yossimar.png';
 
 export default function App() {
   const [score, setScore] = useState(0);
   const [pos, setPos] = useState({ x: 50, y: 300 });
-  const [message, setMessage] = useState('mayrins fea');
+  const [message, setMessage] = useState('¡A jugar!');
   const [gameStatus, setGameStatus] = useState('setup');
   const [timeLeft, setTimeLeft] = useState(60);
   const [numPlayers, setNumPlayers] = useState(1);
@@ -28,14 +28,14 @@ export default function App() {
 
   // Configuración de niveles
   const levels = [
-    { threshold: 0, bg: 'bg-slate-950', msg: 'mayrins fea' },
-    { threshold: 15, bg: 'bg-rose-900', msg: '¡Qué súper fea eres!' },
-    { threshold: 30, bg: 'bg-purple-900', msg: '¡Qué horripilante!' },
-    { threshold: 45, bg: 'bg-orange-900', msg: '¡DIOS MÍO QUÉ ASCO!' },
-    { threshold: 60, bg: 'bg-red-800', msg: '¡PELIGRO DE FEALDAD!' },
+    { threshold: 0, bg: 'bg-slate-950', msg: '¡Sigue intentando!' },
+    { threshold: 15, bg: 'bg-rose-900', msg: '¡Vas muy bien!' },
+    { threshold: 30, bg: 'bg-purple-900', msg: '¡Excelente!' },
+    { threshold: 45, bg: 'bg-orange-900', msg: '¡Eres increíble!' },
+    { threshold: 60, bg: 'bg-red-800', msg: '¡Qué puntería!' },
     { threshold: 80, bg: 'bg-blue-900', msg: '¡Casi llegas a 100!' },
-    { threshold: 100, bg: 'bg-black', msg: '🔥 MÁXIMA FEALDAD 🔥' },
-    { threshold: 130, bg: 'bg-zinc-900', msg: '¡YA CASI!' }
+    { threshold: 100, bg: 'bg-black', msg: '🔥 ¡Le diste en el blanco! 🔥' },
+    { threshold: 130, bg: 'bg-zinc-900', msg: '¡ERES EL MEJOR!' }
   ];
 
   const currentLevel = [...levels].reverse().find(l => score >= l.threshold) || levels[0];
@@ -329,14 +329,14 @@ export default function App() {
           >
             <div className="w-full aspect-square rounded-xl overflow-hidden mb-1.5 bg-slate-100">
               <img
-                src={mayrinImg}
-                alt="Mayrin"
+                src={yossimarImg}
+                alt="Yossimar"
                 className="w-full h-full object-cover grayscale brightness-125"
               />
             </div>
             <div className="text-center overflow-hidden whitespace-nowrap px-0.5">
               <h1 className="font-black text-slate-900 uppercase tracking-tighter leading-none" style={{ fontSize: currentWidth * 0.15 }}>
-                FEA
+                YOSSI
               </h1>
             </div>
           </motion.div>
@@ -354,7 +354,7 @@ export default function App() {
             transition={{ repeat: Infinity, duration: 3 }}
             className="mb-8 p-4 bg-white rounded-[3rem] shadow-[0_0_50px_rgba(255,255,255,0.3)]"
           >
-            <img src={mayrinImg} alt="Mayrin" className="w-32 h-32 object-cover rounded-[2rem]" />
+            <img src={yossimarImg} alt="Yossimar" className="w-32 h-32 object-cover rounded-[2rem]" />
           </motion.div>
 
           <h1 className="text-5xl font-black text-white uppercase italic tracking-tighter leading-none mb-8">
@@ -398,7 +398,7 @@ export default function App() {
           className="flex flex-col items-center justify-center h-full text-center p-6 z-[100]"
         >
           <h1 className="text-6xl font-black text-white uppercase italic tracking-tighter mb-8 bg-clip-text text-transparent bg-gradient-to-b from-white to-white/20">
-            RANKING <span className="text-amber-400">FEA</span>
+            RANKING <span className="text-amber-400">YOSSI</span>
           </h1>
 
           <div className="w-full max-w-sm flex flex-col gap-3 mb-12">
