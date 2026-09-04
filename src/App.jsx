@@ -1,449 +1,291 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import yossimarImg from './assets/yossimar.png';
+import treeImg from './assets/tree.jpg';
+import rockImg from './assets/rock.jpg';
+import yetiImg from './assets/yeti.jpg';
+
+const PLAYER_SIZE = 40;
+const OBSTACLE_SIZE = 50;
+const YETI_SIZE = 80;
+const MAX_SPEED = 15;
+const YETI_SPAWN_SCORE = 2000;
 
 export default function App() {
+  const [gameState, setGameState] = useState('menu'); // menu, playing, gameover
   const [score, setScore] = useState(0);
-  const [pos, setPos] = useState({ x: 50, y: 300 });
-  const [message, setMessage] = useState('¡A jugar!');
-  const [gameStatus, setGameStatus] = useState('setup');
-  const [timeLeft, setTimeLeft] = useState(60);
-  const [numPlayers, setNumPlayers] = useState(1);
-  const [players, setPlayers] = useState([]);
-  const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
-  const [leaderboard, setLeaderboard] = useState([]);
+  
+  // Game state refs for the game loop (avoids re-renders for every frame)
+  const playerRef = useRef({ x: window.innerWidth / 2, y: window.innerHeight * 0.2, vx: 0, vy: 5, status: 'skiing' });
+  const obstaclesRef = useRef([]);
+  const yetiRef = useRef(null);
+  const scoreRef = useRef(0);
+  const frameRef = useRef(null);
+  const keys = useRef({ ArrowLeft: false, ArrowRight: false, ArrowDown: false });
 
-  const avatars = [
-    { icon: '🤡', name: 'Payaso' },
-    { icon: '👹', name: 'Ogro' },
-    { icon: '👽', name: 'Alien' },
-    { icon: '🧟', name: 'Zombie' },
-    { icon: '🧛', name: 'Vampiro' },
-    { icon: '🐖', name: 'Cerdito' }
-  ];
-
-  // Dificultad extrema
-  const currentWidth = Math.max(45, 130 - (score * 0.8));
-  const currentInterval = Math.max(130, 600 - (score * 7));
-
-  // Configuración de niveles
-  const levels = [
-    { threshold: 0, bg: 'bg-slate-950', msg: '¡Sigue intentando!' },
-    { threshold: 15, bg: 'bg-rose-900', msg: '¡Vas muy bien!' },
-    { threshold: 30, bg: 'bg-purple-900', msg: '¡Excelente!' },
-    { threshold: 45, bg: 'bg-orange-900', msg: '¡Eres increíble!' },
-    { threshold: 60, bg: 'bg-red-800', msg: '¡Qué puntería!' },
-    { threshold: 80, bg: 'bg-blue-900', msg: '¡Casi llegas a 100!' },
-    { threshold: 100, bg: 'bg-black', msg: '🔥 ¡Le diste en el blanco! 🔥' },
-    { threshold: 130, bg: 'bg-zinc-900', msg: '¡ERES EL MEJOR!' }
-  ];
-
-  const currentLevel = [...levels].reverse().find(l => score >= l.threshold) || levels[0];
-  const levelNumber = levels.findIndex(l => l.threshold === currentLevel.threshold) + 1;
-
-  const moveCard = useCallback(() => {
-    if (gameStatus !== 'playing') return;
-    const maxX = window.innerWidth - currentWidth - 20;
-    const maxY = window.innerHeight - currentWidth - 180;
-    const randomX = Math.max(10, Math.random() * maxX);
-    const randomY = Math.max(180, Math.random() * maxY);
-    setPos({ x: randomX, y: randomY });
-  }, [currentWidth, gameStatus]);
-
-  useEffect(() => {
-    if (gameStatus !== 'playing') return;
-
-    if (score >= 150) {
-      finishPlayerTurn();
-    } else {
-      setMessage(currentLevel.msg);
-    }
-  }, [score, currentLevel.msg, gameStatus]);
-
-  // Timer Logic
-  useEffect(() => {
-    if (gameStatus !== 'playing') return;
-
-    if (timeLeft <= 0) {
-      finishPlayerTurn();
-      return;
-    }
-
-    const timer = setInterval(() => {
-      setTimeLeft(prev => prev - 1);
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [timeLeft, gameStatus]);
-
-  useEffect(() => {
-    if (gameStatus !== 'playing') return;
-    const interval = setInterval(moveCard, currentInterval);
-    return () => clearInterval(interval);
-  }, [moveCard, currentInterval, gameStatus]);
-
-  const handleTouch = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (gameStatus !== 'playing') return;
-    setScore(s => s + 1);
-    moveCard();
-  };
+  // For rendering
+  const [renderPlayer, setRenderPlayer] = useState({ ...playerRef.current });
+  const [renderObstacles, setRenderObstacles] = useState([]);
+  const [renderYeti, setRenderYeti] = useState(null);
 
   const startGame = () => {
+    playerRef.current = { x: window.innerWidth / 2, y: window.innerHeight * 0.2, vx: 0, vy: 5, status: 'skiing' };
+    obstaclesRef.current = [];
+    yetiRef.current = null;
+    scoreRef.current = 0;
     setScore(0);
-    setTimeLeft(60);
-    setGameStatus('playing');
-    setPos({ x: window.innerWidth / 2 - 50, y: window.innerHeight / 2 });
+    setGameState('playing');
   };
 
-  const finishPlayerTurn = () => {
-    const updatedPlayers = [...players];
-    updatedPlayers[currentPlayerIndex] = {
-      ...updatedPlayers[currentPlayerIndex],
-      score,
-      level: levelNumber,
-      phrase: currentLevel.msg
-    };
-    setPlayers(updatedPlayers);
+  const spawnObstacle = useCallback(() => {
+    const isTree = Math.random() > 0.3;
+    obstaclesRef.current.push({
+      id: Math.random().toString(),
+      type: isTree ? 'tree' : 'rock',
+      x: Math.random() * window.innerWidth,
+      y: window.innerHeight + OBSTACLE_SIZE,
+      width: OBSTACLE_SIZE,
+      height: OBSTACLE_SIZE
+    });
+  }, []);
 
-    if (currentPlayerIndex < numPlayers - 1) {
-      setGameStatus('finished'); // Show summary for this player
-    } else {
-      // All players finished, go to leaderboard
-      const sorted = [...updatedPlayers].sort((a, b) => b.score - a.score);
-      setLeaderboard(sorted);
-      setGameStatus('leaderboard');
+  const spawnYeti = useCallback(() => {
+    if (!yetiRef.current) {
+      yetiRef.current = {
+        x: window.innerWidth / 2,
+        y: -YETI_SIZE,
+        width: YETI_SIZE,
+        height: YETI_SIZE,
+        vx: 0,
+        vy: 0
+      };
     }
+  }, []);
+
+  const checkCollision = (rect1, rect2) => {
+    const margin = 10;
+    return (
+      rect1.x < rect2.x + rect2.width - margin &&
+      rect1.x + PLAYER_SIZE > rect2.x + margin &&
+      rect1.y < rect2.y + rect2.height - margin &&
+      rect1.y + PLAYER_SIZE > rect2.y + margin
+    );
   };
 
-  const nextPlayer = () => {
-    setCurrentPlayerIndex(prev => prev + 1);
-    setScore(0);
-    setTimeLeft(60);
-    setGameStatus('playing');
-  };
+  const gameLoop = useCallback(() => {
+    if (gameState !== 'playing') return;
 
-  const resetGame = () => {
-    setGameStatus('setup');
-    setPlayers([]);
-    setCurrentPlayerIndex(0);
-  };
+    const p = playerRef.current;
+    
+    if (p.status === 'crashed') {
+      // Recover after a bit
+      setTimeout(() => {
+        if (playerRef.current.status === 'crashed') {
+          playerRef.current.status = 'skiing';
+          playerRef.current.vy = 5;
+        }
+      }, 1000);
+    } else if (p.status === 'eaten') {
+      setGameState('gameover');
+      return;
+    } else {
+      // Movement
+      if (keys.current.ArrowLeft) p.vx = -7;
+      else if (keys.current.ArrowRight) p.vx = 7;
+      else p.vx = 0;
 
-  const startRegistration = (count) => {
-    const n = Math.max(1, Math.min(20, parseInt(count) || 1));
-    setNumPlayers(n);
-    setPlayers(Array(n).fill(null).map((_, i) => ({
-      name: `Jugador ${i + 1}`,
-      score: 0,
-      level: 1,
-      phrase: '',
-      avatar: avatars[i % avatars.length]
-    })));
-    setGameStatus('registration');
-  };
+      if (keys.current.ArrowDown) p.vy = Math.min(p.vy + 0.5, MAX_SPEED);
+      else p.vy = 5; // Base speed
 
-  const handleNameChange = (index, name) => {
-    const updatedPlayers = [...players];
-    updatedPlayers[index].name = name;
-    setPlayers(updatedPlayers);
-  };
+      p.x = Math.max(0, Math.min(window.innerWidth - PLAYER_SIZE, p.x + p.vx));
+      
+      scoreRef.current += Math.floor(p.vy / 2);
+      setScore(scoreRef.current);
+    }
 
-  const handleAvatarChange = (index, avatar) => {
-    const updatedPlayers = [...players];
-    updatedPlayers[index].avatar = avatar;
-    setPlayers(updatedPlayers);
-  };
+    // Spawn obstacles
+    if (Math.random() < 0.05 + (scoreRef.current / 50000)) {
+      spawnObstacle();
+    }
 
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
+    // Spawn Yeti
+    if (scoreRef.current > YETI_SPAWN_SCORE) {
+      spawnYeti();
+    }
+
+    // Move obstacles (they move UP relative to the player's downward speed)
+    const currentSpeed = p.status === 'skiing' ? p.vy : 0;
+    
+    obstaclesRef.current = obstaclesRef.current.filter(obs => {
+      obs.y -= currentSpeed;
+      return obs.y > -OBSTACLE_SIZE;
+    });
+
+    // Move Yeti
+    const yeti = yetiRef.current;
+    if (yeti) {
+      // Yeti chases player
+      const dx = p.x - yeti.x;
+      const dy = p.y - yeti.y;
+      
+      yeti.vx = dx > 0 ? 3 : -3;
+      yeti.vy = dy > 0 ? (currentSpeed + 2) : (currentSpeed - 1); // Yeti is faster
+      
+      yeti.x += yeti.vx;
+      yeti.y += yeti.vy - currentSpeed; // Relative movement
+
+      if (checkCollision(p, yeti)) {
+        p.status = 'eaten';
+      }
+    }
+
+    // Check obstacle collisions
+    if (p.status === 'skiing') {
+      for (let obs of obstaclesRef.current) {
+        if (checkCollision(p, obs)) {
+          p.status = 'crashed';
+          p.vy = 0;
+          break;
+        }
+      }
+    }
+
+    // Update React State for rendering
+    setRenderPlayer({ ...p });
+    setRenderObstacles([...obstaclesRef.current]);
+    if (yeti) setRenderYeti({ ...yeti });
+
+    frameRef.current = requestAnimationFrame(gameLoop);
+  }, [gameState, spawnObstacle, spawnYeti]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (['ArrowLeft', 'ArrowRight', 'ArrowDown'].includes(e.key)) {
+        keys.current[e.key] = true;
+      }
+    };
+    const handleKeyUp = (e) => {
+      if (['ArrowLeft', 'ArrowRight', 'ArrowDown'].includes(e.key)) {
+        keys.current[e.key] = false;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (gameState === 'playing') {
+      frameRef.current = requestAnimationFrame(gameLoop);
+    }
+    return () => cancelAnimationFrame(frameRef.current);
+  }, [gameState, gameLoop]);
 
   return (
-    <div className={`fixed inset-0 ${['finished', 'leaderboard'].includes(gameStatus) ? 'bg-black' : currentLevel.bg} transition-colors duration-500 overflow-hidden font-sans select-none touch-none`}>
-
-      {gameStatus === 'setup' && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="flex flex-col items-center justify-center h-full text-center p-6 bg-slate-950/80 backdrop-blur-md z-[100]"
-        >
-          <h1 className="text-5xl font-black text-white uppercase italic tracking-tighter mb-8">
-            ¿Cuántos van a <span className="text-amber-400">jugar</span>?
+    <div className="fixed inset-0 bg-white overflow-hidden font-sans select-none touch-none">
+      
+      {/* MENU */}
+      {gameState === 'menu' && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/80 backdrop-blur-md z-50">
+          <h1 className="text-6xl font-black text-white uppercase italic mb-8">
+            YOSSI <span className="text-amber-400">FREE</span>
           </h1>
-          <div className="flex flex-col gap-6 w-full max-w-xs">
-            <div className="flex bg-white/10 p-2 rounded-2xl border border-white/20">
-              <input
-                type="number"
-                defaultValue={1}
-                onChange={(e) => setNumPlayers(e.target.value)}
-                className="w-full bg-transparent text-white font-black text-3xl text-center outline-none"
-                min="1"
-                max="20"
-              />
-            </div>
-            <button
-              onClick={() => startRegistration(numPlayers)}
-              className="py-4 bg-amber-400 text-black font-black text-xl rounded-2xl hover:scale-105 transition-all shadow-lg"
-            >
-              Continuar
-            </button>
-            <div className="grid grid-cols-4 gap-2 border-t border-white/10 pt-4">
-              {[1, 2, 3, 5].map(n => (
-                <button
-                  key={n}
-                  onClick={() => startRegistration(n)}
-                  className="py-2 bg-white/5 border border-white/10 text-white font-bold rounded-lg hover:bg-white/20"
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-      )}
-
-      {gameStatus === 'registration' && (
-        <motion.div
-          initial={{ opacity: 0, x: 100 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="flex flex-col items-center justify-center h-full text-center p-6 bg-slate-950/80 backdrop-blur-md z-[100]"
-        >
-          <h1 className="text-4xl font-black text-white uppercase italic tracking-tighter mb-8">
-            Personaliza a tus <span className="text-amber-400">victimas</span>
-          </h1>
-          <div className="flex flex-col gap-6 w-full max-w-sm mb-8 overflow-y-auto max-h-[60vh] px-4 py-2">
-            {players.map((p, i) => (
-              <div key={i} className="flex flex-col gap-3 p-4 bg-white/5 border border-white/10 rounded-3xl">
-                <div className="flex items-center gap-4">
-                  <div className="text-4xl p-2 bg-white/10 rounded-2xl shadow-inner">
-                    {p.avatar.icon}
-                  </div>
-                  <input
-                    type="text"
-                    value={p.name}
-                    onChange={(e) => handleNameChange(i, e.target.value)}
-                    className="w-full bg-transparent border-b border-white/20 py-2 text-white font-bold focus:border-amber-400 outline-none"
-                    placeholder={`Nombre ${i + 1}`}
-                  />
-                </div>
-                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                  {avatars.map((av, avIdx) => (
-                    <button
-                      key={avIdx}
-                      onClick={() => handleAvatarChange(i, av)}
-                      className={`text-2xl p-2 rounded-xl border transition-all ${p.avatar.icon === av.icon ? 'bg-amber-400 border-amber-500' : 'bg-white/5 border-white/10'
-                        }`}
-                    >
-                      {av.icon}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
+          <p className="text-white mb-8 max-w-md text-center">
+            Esquiva los árboles y las rocas. Usa las <b>flechas Izquierda/Derecha</b> para moverte y la <b>flecha Abajo</b> para acelerar. ¡Cuidado con el Yeti!
+          </p>
           <button
             onClick={startGame}
-            className="px-12 py-5 bg-amber-400 text-black font-black uppercase text-sm tracking-widest rounded-full hover:scale-110 active:scale-95 transition-transform shadow-[0_0_30px_rgba(251,191,36,0.4)]"
+            className="px-8 py-4 bg-amber-400 text-black font-black uppercase text-xl rounded-xl hover:scale-105 transition-transform"
           >
-            Empezar Destrucción
+            Jugar
           </button>
-        </motion.div>
+        </div>
       )}
 
-      {gameStatus === 'playing' && (
-        <>
-          {/* Marcador superior */}
-          <div className="absolute top-10 left-0 w-full text-center z-50 pointer-events-none">
-            <div className="absolute top-[-2rem] left-0 w-full flex justify-center">
-              <span className="bg-amber-400 text-black px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-xl">
-                <span className="text-base">{players[currentPlayerIndex]?.avatar?.icon}</span>
-                Turno de: {players[currentPlayerIndex]?.name}
-              </span>
-            </div>
-            <div className="flex justify-between px-10 items-start">
-              <div className="text-left">
-                <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.4em] mb-1">
-                  Tiempo
-                </p>
-                <p className="text-4xl font-black text-white italic">
-                  {formatTime(timeLeft)}
-                </p>
-                <div className="w-24 h-1 bg-white/10 rounded-full mt-1 overflow-hidden">
-                  <motion.div
-                    className="h-full bg-amber-400"
-                    initial={{ width: "100%" }}
-                    animate={{ width: `${(timeLeft / 60) * 100}%` }}
-                    transition={{ duration: 1, ease: "linear" }}
-                  />
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.4em] mb-1">
-                  Puntos
-                </p>
-                <motion.div
-                  key={score}
-                  initial={{ scale: 1.4, rotate: -10 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  className="text-6xl font-black text-white italic"
-                >
-                  {score}
-                </motion.div>
-              </div>
-            </div>
-
-            <div className="mt-4">
-              <AnimatePresence mode="wait">
-                <motion.p
-                  key={message}
-                  initial={{ opacity: 0, scale: 0.5 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 1.5 }}
-                  className="text-amber-400 font-black text-lg uppercase tracking-widest px-4 italic drop-shadow-md"
-                >
-                  {message}
-                </motion.p>
-              </AnimatePresence>
-            </div>
-          </div>
-
-          {/* La Card "Indomable" */}
-          <motion.div
-            animate={{
-              x: pos.x,
-              y: pos.y,
-              width: currentWidth,
-              rotate: [0, -10, 10, -5, 5, 0]
-            }}
-            transition={{
-              x: { type: "tween", duration: 0.1, ease: "linear" },
-              y: { type: "tween", duration: 0.1, ease: "linear" },
-              rotate: { repeat: Infinity, duration: 0.2 }
-            }}
-            onPointerDown={handleTouch}
-            className="absolute cursor-pointer p-1.5 bg-white rounded-2xl shadow-[0_15px_40px_rgba(0,0,0,0.8)] flex flex-col items-center border-4 border-white/40 active:brightness-75"
-            style={{ width: currentWidth }}
-          >
-            <div className="w-full aspect-square rounded-xl overflow-hidden mb-1.5 bg-slate-100">
-              <img
-                src={yossimarImg}
-                alt="Yossimar"
-                className="w-full h-full object-cover grayscale brightness-125"
-              />
-            </div>
-            <div className="text-center overflow-hidden whitespace-nowrap px-0.5">
-              <h1 className="font-black text-slate-900 uppercase tracking-tighter leading-none" style={{ fontSize: currentWidth * 0.15 }}>
-                YOSSI
-              </h1>
-            </div>
-          </motion.div>
-        </>
-      )}
-
-      {gameStatus === 'finished' && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.5 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="flex flex-col items-center justify-center h-full text-center p-6 z-[100]"
-        >
-          <motion.div
-            animate={{ rotate: [0, 5, -5, 0], scale: [1, 1.1, 1] }}
-            transition={{ repeat: Infinity, duration: 3 }}
-            className="mb-8 p-4 bg-white rounded-[3rem] shadow-[0_0_50px_rgba(255,255,255,0.3)]"
-          >
-            <img src={yossimarImg} alt="Yossimar" className="w-32 h-32 object-cover rounded-[2rem]" />
-          </motion.div>
-
-          <h1 className="text-5xl font-black text-white uppercase italic tracking-tighter leading-none mb-8">
-            RESULTADOS
+      {/* GAME OVER */}
+      {gameState === 'gameover' && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-900/90 backdrop-blur-md z-50">
+          <h1 className="text-6xl font-black text-white uppercase italic mb-4">
+            ¡TE COMIÓ EL YETI!
           </h1>
-
-          <div className="grid grid-cols-2 gap-8 mb-12 w-full max-w-sm">
-            <div className="bg-white/5 border border-white/10 p-4 rounded-3xl backdrop-blur-sm">
-              <p className="text-white/40 text-[10px] font-black uppercase tracking-widest mb-1">Nivel</p>
-              <p className="text-4xl font-black text-amber-400 italic">{levelNumber}</p>
-            </div>
-            <div className="bg-white/5 border border-white/10 p-4 rounded-3xl backdrop-blur-sm">
-              <p className="text-white/40 text-[10px] font-black uppercase tracking-widest mb-1">Puntos</p>
-              <p className="text-4xl font-black text-white italic">{score}</p>
-            </div>
-          </div>
-
-          <div className="mb-12">
-            <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.4em] mb-2 flex items-center justify-center gap-2">
-              <span className="text-lg">{players[currentPlayerIndex]?.avatar?.icon}</span>
-              Sentencia para {players[currentPlayerIndex]?.name}
-            </p>
-            <p className="text-2xl font-black text-white uppercase italic tracking-tighter">
-              "{currentLevel.msg}"
-            </p>
-          </div>
-
+          <p className="text-3xl text-amber-400 font-bold mb-8">Distancia: {score}m</p>
           <button
-            onClick={nextPlayer}
-            className="px-12 py-4 bg-amber-400 text-black font-black uppercase text-sm tracking-widest rounded-full hover:scale-110 active:scale-95 transition-transform"
+            onClick={startGame}
+            className="px-8 py-4 bg-white text-black font-black uppercase text-xl rounded-xl hover:scale-105 transition-transform"
           >
-            Siguiente Jugador
+            Intentar de nuevo
           </button>
-        </motion.div>
+        </div>
       )}
 
-      {gameStatus === 'leaderboard' && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="flex flex-col items-center justify-center h-full text-center p-6 z-[100]"
-        >
-          <h1 className="text-6xl font-black text-white uppercase italic tracking-tighter mb-8 bg-clip-text text-transparent bg-gradient-to-b from-white to-white/20">
-            RANKING <span className="text-amber-400">YOSSI</span>
-          </h1>
-
-          <div className="w-full max-w-sm flex flex-col gap-3 mb-12">
-            {leaderboard.map((p, i) => (
-              <motion.div
-                initial={{ opacity: 0, x: -50 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.1 }}
-                key={i}
-                className={`flex items-center justify-between p-4 rounded-2xl backdrop-blur-md border ${i === 0 ? 'bg-amber-400 border-amber-500 text-black' : 'bg-white/5 border-white/10 text-white'
-                  }`}
-              >
-                <div className="flex items-center gap-4">
-                  <span className={`text-2xl font-black ${i === 0 ? 'text-black' : 'text-amber-400'}`}>#{i + 1}</span>
-                  <div className="text-3xl p-1 bg-black/10 rounded-lg">{p.avatar.icon}</div>
-                  <div className="text-left">
-                    <p className="font-black uppercase tracking-tighter leading-none">{p.name}</p>
-                    <p className={`text-[10px] font-bold uppercase opacity-60`}>Lvl {p.level}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-2xl font-black italic">{p.score}</p>
-                  <p className="text-[8px] uppercase font-bold opacity-60">Puntos</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-
-          <button
-            onClick={resetGame}
-            className="px-12 py-4 bg-white text-black font-black uppercase text-sm tracking-widest rounded-full hover:scale-110 active:scale-95 transition-transform shadow-2xl"
-          >
-            Jugar de nuevo
-          </button>
-        </motion.div>
+      {/* GAME UI */}
+      {gameState === 'playing' && (
+        <div className="absolute top-4 right-4 text-3xl font-black text-slate-800 z-40 bg-white/50 p-2 rounded">
+          {score}m
+        </div>
       )}
 
-      {/* Rastro de glitch de fondo apenas visible */}
-      <div className="absolute inset-0 opacity-10 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
+      {/* GAME WORLD */}
+      <div className="relative w-full h-full">
+        {/* PLAYER */}
+        {(gameState === 'playing' || gameState === 'gameover') && (
+          <div
+            style={{
+              position: 'absolute',
+              left: renderPlayer.x,
+              top: renderPlayer.y,
+              width: PLAYER_SIZE,
+              height: PLAYER_SIZE,
+              transform: `rotate(${renderPlayer.vx * 2}deg)`,
+              filter: renderPlayer.status === 'crashed' ? 'grayscale(100%)' : 'none'
+            }}
+            className="z-20 flex flex-col items-center"
+          >
+            <div className="w-full h-full rounded-full overflow-hidden border-2 border-slate-800 bg-slate-200">
+              <img src={yossimarImg} alt="Player" className="w-full h-full object-cover" />
+            </div>
+            {renderPlayer.status === 'crashed' && <span className="absolute -top-6 text-xl">💥</span>}
+          </div>
+        )}
 
-      <style dangerouslySetInnerHTML={{
-        __html: `
-        body { margin: 0; background-color: #000; overflow: hidden; touch-action: none; }
-        * { -webkit-tap-highlight-color: transparent; }
-      `}} />
+        {/* OBSTACLES */}
+        {(gameState === 'playing' || gameState === 'gameover') && renderObstacles.map(obs => (
+          <div
+            key={obs.id}
+            style={{
+              position: 'absolute',
+              left: obs.x,
+              top: obs.y,
+              width: obs.width,
+              height: obs.height,
+            }}
+            className="z-10"
+          >
+            <img src={obs.type === 'tree' ? treeImg : rockImg} alt={obs.type} className="w-full h-full object-cover rounded shadow-md mix-blend-multiply" />
+          </div>
+        ))}
+
+        {/* YETI */}
+        {(gameState === 'playing' || gameState === 'gameover') && renderYeti && (
+          <div
+            style={{
+              position: 'absolute',
+              left: renderYeti.x,
+              top: renderYeti.y,
+              width: renderYeti.width,
+              height: renderYeti.height,
+            }}
+            className="z-30"
+          >
+            <img src={yetiImg} alt="Yeti" className="w-full h-full object-cover rounded mix-blend-multiply" />
+          </div>
+        )}
+      </div>
+
     </div>
   );
 }
